@@ -90,9 +90,9 @@ class RequestSender:
                 continue
             
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 15))
-                # Add some randomness to avoid synchronized retries
-                wait_time = retry_after + random.uniform(1, 5)
+                retry_after = int(response.headers.get('Retry-After', 20))
+                # Add substantial randomness and longer wait for 429 errors
+                wait_time = retry_after + random.uniform(5, 15)
                 logging.info(f"Rate limited. Retrying after {wait_time:.1f} seconds...")
                 time.sleep(wait_time)
                 retries += 1
@@ -110,12 +110,12 @@ class RequestSender:
         '''
         Dynamically adjust delay based on success/error ratio
         '''
-        if error_count > success_count:
-            # Increase delay if getting too many errors
-            return min(current_delay * 1.5, 10.0)
-        elif success_count > error_count * 3:
-            # Decrease delay if doing well
-            return max(current_delay * 0.8, 0.5)
+        if error_count > 0:
+            # More aggressive increase when hitting rate limits
+            return min(current_delay * 2.0, 15.0)
+        elif success_count > error_count * 5 and current_delay > 1.0:
+            # Only decrease delay if we have a very good success rate and delay is above 1s
+            return max(current_delay * 0.9, 1.0)
         return current_delay
 
     def _generate_headers(self, username):
@@ -243,15 +243,15 @@ if __name__ == "__main__":
     game_slug_generator = GameSlugGenerator()
     if spam_choice in ["yes", "y", ""]:
         spam_count = input("How many times do you want to spam? (Default is 9999): ")
-        delay_input = input("Enter delay between requests in seconds (Default is 2.0): ").strip()
+        delay_input = input("Enter delay between requests in seconds (Default is 3.0): ").strip()
         try:
-            delay = float(delay_input) if delay_input else 2.0
-            if delay < 0.5:
-                delay = 2.0
-                logging.warning("Delay too short. Using default 2.0 seconds for better success rate.")
+            delay = float(delay_input) if delay_input else 3.0
+            if delay < 1.0:
+                delay = 3.0
+                logging.warning("Delay too short. Using default 3.0 seconds for better success rate.")
         except ValueError:
-            delay = 2.0
-            logging.warning("Invalid delay format. Using default 2.0 seconds.")
+            delay = 3.0
+            logging.warning("Invalid delay format. Using default 3.0 seconds.")
         
         print()
         spam_count = int(spam_count) if spam_count.isdigit() else 9999
@@ -293,18 +293,23 @@ if __name__ == "__main__":
                 error_count += 1
                 logging.error("Failed to send message.")
             
-            # Adaptive delay adjustment every 10 requests
-            if (i + 1) % 10 == 0:
+            # Adaptive delay adjustment every 5 requests (more frequent monitoring)
+            if (i + 1) % 5 == 0:
+                old_delay = current_delay
                 current_delay = request_sender.adaptive_delay(current_delay, success_count, error_count)
-                if current_delay != delay:
+                if current_delay != old_delay:
                     logging.info(f"Adjusted delay to {current_delay:.1f}s (Success: {success_count}, Errors: {error_count})")
+                # Reset counters after adjustment
+                if error_count > 0:
+                    success_count = 0
+                    error_count = 0
             
             # Add delay between requests with randomization (except for the last one)
             if i < spam_count - 1:
                 # Add random variation to delay to avoid patterns
-                random_delay = current_delay + random.uniform(-0.3, 0.7)
-                if random_delay < 0.5:
-                    random_delay = 0.5
+                random_delay = current_delay + random.uniform(-0.5, 1.0)
+                if random_delay < 1.0:
+                    random_delay = 1.0
                 time.sleep(random_delay)
     else:
         device_id = device_generator.generate_device_id()
