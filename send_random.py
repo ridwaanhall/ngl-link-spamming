@@ -32,6 +32,7 @@ class RequestSender:
         self.url = url
         self.user_agent = UserAgent()
         self.fake_ip_generator = FakeIPGenerator()
+        self.session = requests.Session()  # Reuse session for connection pooling
 
     def send_request(self, username, question, device_id, game_slug, referrer=''):
         '''
@@ -47,10 +48,9 @@ class RequestSender:
         }
         
         # Add session to maintain cookies and connection pooling
-        session = requests.Session()
         
         try:
-            response = session.post(self.url, headers=headers, data=data, timeout=10)
+            response = self.session.post(self.url, headers=headers, data=data, timeout=10)
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
             logging.error(f"HTTP Error: {e}")
@@ -58,8 +58,6 @@ class RequestSender:
         except requests.exceptions.RequestException as e:
             logging.error(f"Request Failed: {e}")
             return None
-        finally:
-            session.close()
         
         return response
 
@@ -68,12 +66,16 @@ class RequestSender:
         Sends a POST request to the specified URL with retry the provided parameters.
         '''
         retries = 0
+        success_count = 0
+        error_count = 0
+        delay = 2.0  # Initial delay
         while retries < max_retries:
             response = self.send_request(username, question, device_id, game_slug, referrer)
             if response is None:
                 logging.info("Request failed, retrying...")
+                error_count += 1
                 retries += 1
-                time.sleep(2)
+                time.sleep(delay)
                 continue
             
             if response.status_code == 404:
@@ -88,16 +90,33 @@ class RequestSender:
                 continue
             
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 10))
-                logging.info(f"Rate limited. Retrying after {retry_after} seconds...")
-                time.sleep(retry_after)
+                retry_after = int(response.headers.get('Retry-After', 15))
+                # Add some randomness to avoid synchronized retries
+                wait_time = retry_after + random.uniform(1, 5)
+                logging.info(f"Rate limited. Retrying after {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
                 retries += 1
                 continue
 
+            success_count += 1
+            # Adjust delay based on success/error ratio
+            delay = self.adaptive_delay(delay, success_count, error_count)
             return response
 
         logging.error("Max retries reached. Failed to send request.")
         return None
+
+    def adaptive_delay(self, current_delay, success_count, error_count):
+        '''
+        Dynamically adjust delay based on success/error ratio
+        '''
+        if error_count > success_count:
+            # Increase delay if getting too many errors
+            return min(current_delay * 1.5, 10.0)
+        elif success_count > error_count * 3:
+            # Decrease delay if doing well
+            return max(current_delay * 0.8, 0.5)
+        return current_delay
 
     def _generate_headers(self, username):
         '''
@@ -130,16 +149,28 @@ class RequestSender:
             headers[header] = fake_ip
         
         # Sometimes add additional realistic headers
-        if random.random() < 0.3:  # 30% chance
+        if random.random() < 0.4:  # 40% chance
             headers['X-Requested-With'] = 'XMLHttpRequest'
         
-        if random.random() < 0.2:  # 20% chance
+        if random.random() < 0.3:  # 30% chance
             headers['Accept-Language'] = random.choice([
                 'en-US,en;q=0.9',
                 'en-GB,en;q=0.9',
                 'en-US,en;q=0.8,es;q=0.7',
-                'en-US,en;q=0.9,fr;q=0.8'
+                'en-US,en;q=0.9,fr;q=0.8',
+                'id-ID,id;q=0.9,en;q=0.8'
             ])
+        
+        if random.random() < 0.2:  # 20% chance
+            headers['Accept-Encoding'] = random.choice([
+                'gzip, deflate, br',
+                'gzip, deflate',
+                'gzip'
+            ])
+        
+        # Add random connection header
+        if random.random() < 0.3:  # 30% chance
+            headers['Connection'] = random.choice(['keep-alive', 'close'])
         
         return headers
 
@@ -212,15 +243,15 @@ if __name__ == "__main__":
     game_slug_generator = GameSlugGenerator()
     if spam_choice in ["yes", "y", ""]:
         spam_count = input("How many times do you want to spam? (Default is 9999): ")
-        delay_input = input("Enter delay between requests in seconds (Default is 1.0): ").strip()
+        delay_input = input("Enter delay between requests in seconds (Default is 2.0): ").strip()
         try:
-            delay = float(delay_input) if delay_input else 1.0
-            if delay < 0:
-                delay = 1.0
-                logging.warning("Negative delay not allowed. Using default 1.0 second.")
+            delay = float(delay_input) if delay_input else 2.0
+            if delay < 0.5:
+                delay = 2.0
+                logging.warning("Delay too short. Using default 2.0 seconds for better success rate.")
         except ValueError:
-            delay = 1.0
-            logging.warning("Invalid delay format. Using default 1.0 second.")
+            delay = 2.0
+            logging.warning("Invalid delay format. Using default 2.0 seconds.")
         
         print()
         spam_count = int(spam_count) if spam_count.isdigit() else 9999
@@ -228,8 +259,12 @@ if __name__ == "__main__":
         count_format = f'{{:0{len(str(spam_count))}d}}'
 
         logging.info(f"Starting spam with {spam_count} messages and {delay} second delay between requests...")
-        logging.info("Using subtle IP rotation and realistic headers to avoid detection...")
+        logging.info("Using adaptive timing and IP rotation to avoid detection...")
         print()
+
+        success_count = 0
+        error_count = 0
+        current_delay = delay
 
         for i in range(spam_count):
             device_id = device_generator.generate_device_id()
@@ -246,15 +281,31 @@ if __name__ == "__main__":
                     user_region_code = response_data.get("userRegion", "Unknown Region")
                     user_region_name = UserRegionGenerator.get_country_name(user_region_code)
                     
-                    logging.info(f"({count_format.format(i+1)} of {count_format.format(spam_count)}) {response.status_code} {response.reason} {username.upper()} FROM {user_region_name.upper()} -> '{game_slug.upper()}'") # '{message_input.upper()}'
+                    if response.status_code == 200:
+                        success_count += 1
+                        logging.info(f"({count_format.format(i+1)} of {count_format.format(spam_count)}) {response.status_code} {response.reason} {username.upper()} FROM {user_region_name.upper()} -> '{game_slug.upper()}'") # '{message_input.upper()}'
+                    else:
+                        error_count += 1
                 except ValueError:
+                    error_count += 1
                     logging.error("Failed to decode JSON from response.")
             else:
+                error_count += 1
                 logging.error("Failed to send message.")
             
-            # Add delay between requests (except for the last one)
+            # Adaptive delay adjustment every 10 requests
+            if (i + 1) % 10 == 0:
+                current_delay = request_sender.adaptive_delay(current_delay, success_count, error_count)
+                if current_delay != delay:
+                    logging.info(f"Adjusted delay to {current_delay:.1f}s (Success: {success_count}, Errors: {error_count})")
+            
+            # Add delay between requests with randomization (except for the last one)
             if i < spam_count - 1:
-                time.sleep(delay)
+                # Add random variation to delay to avoid patterns
+                random_delay = current_delay + random.uniform(-0.3, 0.7)
+                if random_delay < 0.5:
+                    random_delay = 0.5
+                time.sleep(random_delay)
     else:
         device_id = device_generator.generate_device_id()
         message_input = message_generator.generate_message()
