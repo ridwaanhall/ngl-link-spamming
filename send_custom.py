@@ -111,7 +111,7 @@ class DeviceIDGenerator:
 
 if __name__ == "__main__":
     load_dotenv()
-    url = os.getenv("URL")
+    url = "https://ngl.link/api/submit"
     if not url:
         logging.error("No URL provided in environment. Exiting.")
         sys.exit(1)
