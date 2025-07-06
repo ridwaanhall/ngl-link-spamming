@@ -103,7 +103,7 @@ class RequestSender:
 
 if __name__ == "__main__":
     load_dotenv()
-    url = os.getenv("URL")
+    url = "https://ngl.link/api/submit"
     if not url:
         logging.error("No URL provided in environment. Exiting.")
         sys.exit(1)
@@ -127,10 +127,23 @@ if __name__ == "__main__":
     game_slug_generator = GameSlugGenerator()
     if spam_choice in ["yes", "y", ""]:
         spam_count = input("How many times do you want to spam? (Default is 9999): ")
+        delay_input = input("Enter delay between requests in seconds (Default is 1.0): ").strip()
+        try:
+            delay = float(delay_input) if delay_input else 1.0
+            if delay < 0:
+                delay = 1.0
+                logging.warning("Negative delay not allowed. Using default 1.0 second.")
+        except ValueError:
+            delay = 1.0
+            logging.warning("Invalid delay format. Using default 1.0 second.")
+        
         print()
         spam_count = int(spam_count) if spam_count.isdigit() else 9999
 
         count_format = f'{{:0{len(str(spam_count))}d}}'
+
+        logging.info(f"Starting spam with {spam_count} messages and {delay} second delay between requests...")
+        print()
 
         for i in range(spam_count):
             device_id = device_generator.generate_device_id()
@@ -152,6 +165,10 @@ if __name__ == "__main__":
                     logging.error("Failed to decode JSON from response.")
             else:
                 logging.error("Failed to send message.")
+            
+            # Add delay between requests (except for the last one)
+            if i < spam_count - 1:
+                time.sleep(delay)
     else:
         device_id = device_generator.generate_device_id()
         message_input = message_generator.generate_message()
