@@ -79,8 +79,9 @@ class MessageGenerator:
         elif message_type == MessageType.HACKER:
             return random.choice(self.hacker_messages)
         else:  # RANDOM
-            # Heavily favor hacker messages (like original code)
-            if random.random() < 1.0:  # Always hacker messages for now
+            # Heavily favor hacker messages, but allow some generic messages
+            hacker_probability = 0.8  # 80% chance for hacker messages
+            if random.random() < hacker_probability:
                 return random.choice(self.hacker_messages)
             else:
                 return random.choice(self.generic_messages)
