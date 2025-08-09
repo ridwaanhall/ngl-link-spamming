@@ -11,13 +11,14 @@ class GameSlugGenerator:
         """Initialize with predefined game slugs."""
         self.game_slugs = [
             "",  # Empty slug
-            "confessions",  
-            "3words",  
-            "tbh",  
-            "shipme",  
-            "yourcrush",  
-            "cancelled",  
-            "dealbreaker"  
+            "confessions", # used with confess.ngl.link/username
+            "3words", # used with 3words.ngl.link/username
+            "neverhave", # used with ngl.link/username/neverhave
+            "tbh", # used with ngl.link/username/tbh
+            "shipme", # used with ngl.link/username/shipme
+            "yourcrush", # used with ngl.link/username/yourcrush
+            "cancelled", # used with ngl.link/username/cancelled
+            "dealbreaker" # used with ngl.link/username/dealbreaker
         ]
     
     def generate(self) -> str:
