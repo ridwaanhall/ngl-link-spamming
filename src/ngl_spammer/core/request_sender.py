@@ -61,6 +61,7 @@ class RequestSender:
             'referrer': referrer
         }
         
+        response = None
         try:
             response = self.session.post(
                 self.url, 
