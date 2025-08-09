@@ -32,8 +32,8 @@ ngl-link-spamming/
 │   └── cli/                   # Command-line interface
 │       └── interface.py
 ├── scripts/                   # Entry point scripts
-│   ├── send_custom.py
-│   └── send_random.py
+│   ├── custom.py
+│   └── random.py
 ├── config/                    # Configuration files
 │   └── .env.example
 ├── tests/                     # Unit tests
@@ -88,13 +88,13 @@ pip install pytest pytest-cov
 #### Custom Message Mode
 
 ```bash
-python scripts/send_custom.py
+python scripts/custom.py
 ```
 
 #### Random Message Mode
 
 ```bash
-python scripts/send_random.py
+python scripts/random.py
 ```
 
 ### Advanced Usage
