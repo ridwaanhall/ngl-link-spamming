@@ -7,6 +7,10 @@ from typing import Optional, Dict, Any
 from .config import config
 from .logger import logger
 
+# Jitter range constants for AdaptiveDelayManager
+ADAPTIVE_DELAY_JITTER_MIN = -0.5
+ADAPTIVE_DELAY_JITTER_MAX = 1.0
+
 
 class AdaptiveDelayManager:
     """Manages adaptive delays between requests to avoid rate limiting."""
@@ -45,7 +49,7 @@ class AdaptiveDelayManager:
         """Wait with calculated delay plus random jitter."""
         delay = self.calculate_delay()
         # Add random variation to avoid patterns
-        jittered_delay = delay + random.uniform(-0.5, 1.0)
+        jittered_delay = delay + random.uniform(ADAPTIVE_DELAY_JITTER_MIN, ADAPTIVE_DELAY_JITTER_MAX)
         if jittered_delay < config.min_delay:
             jittered_delay = config.min_delay
         
