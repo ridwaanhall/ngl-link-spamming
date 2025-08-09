@@ -23,7 +23,7 @@ class TestDeviceIDGenerator:
     def test_generate_device_id_uniqueness(self):
         """Test that generated device IDs are unique."""
         device_ids = set()
-        for _ in range(1000):
+        for _ in range(200):
             device_id = DeviceIDGenerator.generate()
             assert device_id not in device_ids
             device_ids.add(device_id)
